@@ -4,27 +4,27 @@ Repositorio: https://github.com/aleonon/parcial-pawnee-a (visibilidad no comprob
 Rama: examen/e017
 
 ## Alcance y entorno de pruebas
-Se revisó `REPORTES.md` y se ejecutaron pruebas contra la API y la interfaz locales. No se corrigió código: solo se completa esta auditoría, por lo que no hay commit de corrección. El commit inspeccionado es `fa2973d`.
+Se revisó `REPORTES.md` y se ejecutaron pruebas contra la API y la interfaz locales.
 
-La API respondió 200 en `/api/salud` y el diagnóstico reportó conexión a MongoDB y 3 criaturas/4 avistamientos semilla. Sin embargo, las consultas y escrituras que requieren documentos respondieron 500 (`Error interno del servidor`). El POST temporal de criatura también respondió 500; no devolvió id ni creó registros. El diagnóstico posterior confirmó que las cantidades siguieron en 3/4. Este fallo común bloqueó las verificaciones que necesitaban leer o modificar datos. No se pudo determinar su causa en esta auditoría.
+La API respondió 200 en `/api/salud` y el diagnóstico reportó conexión a MongoDB y 3 criaturas/4 avistamientos semilla. Cualquier retorno de datos responde 500 (`Error interno del servidor`). El POST temporal de criatura también respondió 500; no devolvió id ni creó registros. El diagnóstico posterior confirmó que las cantidades siguieron en 3/4. Este fallo bloqueó las verificaciones que necesitaban leer o modificar datos. No se pudo determinar su causa.
 
-`npm run check` terminó correctamente para backend y frontend. No se creó un archivo aparte en `evidencias/`; los pasos y resultados quedan registrados aquí.
+`npm run check` terminó correctamente para backend y frontend.
 
 ## A-01 · No se registra el avistamiento
 ### Síntoma
-Según el reporte, se completa el formulario con una criatura existente, testigo, ubicación, fecha y descripción, pero no se guarda el avistamiento. En la prueba HTTP se reprodujo el cuerpo que envía el formulario nuevo, con `criaturaId=65a000000000000000000101`. El resultado esperado era 201 y persistencia; se observó 400, `Campos no permitidos en el cuerpo`, sin crear un registro. No hubo una medición anterior independiente a esta auditoría.
+Se completa el formulario con una criatura existente, testigo, ubicación, fecha y descripción, pero no se guarda el avistamiento. En la prueba HTTP se reprodujo el cuerpo que envía el formulario nuevo, con `criaturaId=65a000000000000000000101`. El resultado esperado era 201 y persistencia; se observó 400, `Campos no permitidos en el cuerpo`, sin crear un registro. No hubo una medición anterior independiente a esta auditoría.
 
 ### Causa
 En `frontend/src/paginas/FormularioAvistamiento.tsx`, el formulario usa el campo `criaturaId` al crear. El servicio de `backend/src/services/avistamientos.service.ts` solo permite `criatura` en su lista blanca y exige ese campo. La petición del formulario se rechaza antes de crear el documento, por lo que nunca navega al detalle.
 
 ### Cambio
-No se modificó el código ni se hizo commit de corrección, por instrucción. La causa queda identificada, pero el problema no está corregido.
+Se corrigió únicamente `frontend/src/paginas/FormularioAvistamiento.tsx`: tanto al crear como al editar, el formulario ahora envía el campo `criatura` que acepta el contrato de la API y exige el servicio. Antes, al crear enviaba `criaturaId`, campo que la lista blanca del backend rechazaba. No se modificaron otros archivos de código ni se creó un commit.
 
 ### Prueba
-Se envió por `POST /api/avistamientos` el cuerpo `{"criaturaId":"65a000000000000000000101","testigo":"Auditoria temporal","ubicacion":"Prueba local","fecha":"2026-10-21"}`; resultado observado: 400 `Campos no permitidos en el cuerpo`, en vez de 201. Luego se probó una referencia inexistente usando el campo aceptado `criatura`; resultado observado: 500, no el 404 esperado, debido al fallo común de acceso a documentos descrito arriba. No fue posible verificar GET, persistencia, recarga ni asociación. Evidencia: resultados HTTP de esta auditoría; no hay archivo adicional.
+La prueba anterior con `criaturaId` devolvió 400 `Campos no permitidos en el cuerpo`. Tras la corrección, `npm run check` terminó correctamente para backend y frontend y el archivo no presenta errores en Problems. Se envió un POST temporal con el formato corregido `{"criatura":"65a000000000000000000101","testigo":"Auditoria A01 temporal","ubicacion":"Prueba local descartable","fecha":"2026-10-21","descripcion":"Prueba temporal A01"}`; respondió 500 `Error interno del servidor`, no 201. No se creó un registro ni se pudo comprobar detalle, GET, persistencia o asociación. La respuesta coincide con el fallo general de operaciones con documentos descrito en el alcance. No se generó archivo adicional de evidencia.
 
 ### Estado
-No resuelto. El desajuste entre `criaturaId` y `criatura` impide el alta desde el formulario. La prueba de referencia inexistente también quedó bloqueada por el 500 de la API.
+Parcial. Se corrigió el desajuste del cuerpo enviado por el formulario, pero no se pudo confirmar el alta de extremo a extremo mientras las escrituras de la API responden 500. La prueba de referencia inexistente también queda bloqueada por ese fallo.
 
 ## A-02 · La lista no identifica a la criatura
 ### Síntoma
