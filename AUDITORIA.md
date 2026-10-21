@@ -10,6 +10,14 @@ Al inicio, `/api/salud` respondía 200, pero la instancia del backend que atend�
 
 `npm run check` terminó correctamente para backend y frontend.
 
+## Resumen final
+| Incidencia | Estado | Resolución |
+|---|---|---|
+| A-01 | Resuelto | El formulario envía `criatura`, campo esperado por la API; creación, detalle y persistencia verificados. |
+| A-02 | Resuelto | El listado popula la criatura relacionada y presenta su nombre; se verificó también el estado vacío. |
+| A-03 | Resuelto | Las actualizaciones ejecutan validadores Mongoose; valores fuera de 1–10 se rechazan con 400. |
+| A-04 | Resuelto | El filtro vuelve a consultar cuando cambia el tipo, sin requerir actualización manual. |
+
 ## A-01 · No se registra el avistamiento
 ### Síntoma
 Se completa el formulario con una criatura existente, testigo, ubicación, fecha y descripción, pero no se guarda el avistamiento. En la prueba HTTP se reprodujo el cuerpo que envía el formulario nuevo, con `criaturaId=65a000000000000000000101`. El resultado esperado era 201 y persistencia; se observó 400, `Campos no permitidos en el cuerpo`, sin crear un registro. No hubo una medición anterior independiente a esta auditoría.
@@ -63,13 +71,13 @@ Resuelto. El nivel válido se guarda, el valor fuera del rango se rechaza con 40
 Según el reporte, al cambiar de Todos a `mitica` y luego a `mecanica`, selección y resultados no corresponden hasta pulsar Actualizar lista. El resultado esperado era consultar automáticamente cada selección, distinguir carga/error/vacío y restaurar Todos. En el navegador, el selector cambió, pero la pantalla permaneció en error de carga de criaturas.
 
 ### Causa
-En `frontend/src/paginas/ListaCriaturas.tsx`, el efecto que llama a `listarCriaturas(tipo)` depende de `[recarga]`, pero no de `tipo`. Cambiar el selector actualiza el estado `tipo` sin volver a ejecutar la consulta. El control manual sí incrementa `recarga`. `EstadoCarga` contempla estados loading, error y empty; no corrige la dependencia ausente. La semilla no contiene criaturas `mecanica`.
+En `frontend/src/paginas/ListaCriaturas.tsx`, el efecto que llama a `listarCriaturas(tipo)` dependía de `[recarga]`, pero no de `tipo`. Cambiar el selector actualizaba el estado sin volver a ejecutar la consulta. El control manual sí incrementaba `recarga`. `EstadoCarga` ya contemplaba loading, error y empty.
 
 ### Cambio
-No se modificó el código ni se hizo commit de corrección, por instrucción. La causa queda identificada, pero el problema no está corregido.
+Se añadió `tipo` a las dependencias del `useEffect` en `frontend/src/paginas/ListaCriaturas.tsx`; ahora el listado consulta de nuevo cuando cambia el selector. Cambio puntual; no se hizo commit.
 
 ### Prueba
-En el navegador local se seleccionó `mitica` y después `mecanica`; el contador de solicitudes a la API durante ambos cambios fue 0 y el mensaje de error existente no cambió. Esto confirma que cambiar el selector no dispara consultas. Al mismo tiempo, la API responde 500 al cargar criaturas, por lo que no se pudieron validar resultados reales, el vacío de `mecanica` ni la restauración con datos. Evidencia: interacción de navegador en `/`; no se guardó captura ni archivo adicional.
+En el navegador, cambiar a `mitica` consultó `/api/criaturas?tipo=mitica` y mostró El Dragón del Estacionamiento. Cambiar a `mecanica` consultó `/api/criaturas?tipo=mecanica` y presentó el estado vacío. Volver a Todos consultó `/api/criaturas` y restauró el listado sin pulsar Actualizar lista. `npm run check` pasó para backend y frontend.
 
 ### Estado
-No resuelto. El efecto no vuelve a consultar al cambiar `tipo`; las verificaciones de resultados y estados con la semilla quedaron bloqueadas por el 500 de la API.
+Resuelto. El cambio de tipo inicia la consulta correspondiente y actualiza los resultados automáticamente.
