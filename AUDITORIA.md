@@ -6,7 +6,7 @@ Rama: examen/e017
 ## Alcance y entorno de pruebas
 Se revisó `REPORTES.md` y se ejecutaron pruebas contra la API y la interfaz locales.
 
-La API respondió 200 en `/api/salud` y el diagnóstico reportó conexión a MongoDB y 3 criaturas/4 avistamientos semilla. Cualquier retorno de datos responde 500 (`Error interno del servidor`). El POST temporal de criatura también respondió 500; no devolvió id ni creó registros. El diagnóstico posterior confirmó que las cantidades siguieron en 3/4. Este fallo bloqueó las verificaciones que necesitaban leer o modificar datos. No se pudo determinar su causa.
+Al inicio, `/api/salud` respondía 200, pero la instancia del backend que atendía el puerto 3000 devolvía 500 en consultas de datos. Se comprobó que MongoDB y los servicios funcionaban mediante consultas directas y una instancia nueva del backend en el puerto 3001. Se reinició el backend en el puerto 3000, que usa el proxy de Vite; después del reinicio, las consultas respondieron 200 y la interfaz mostró las criaturas y avistamientos semilla. La causa operacional comprobada fue la instancia anterior del backend; no se cambió código para resolver ese 500.
 
 `npm run check` terminó correctamente para backend y frontend.
 
@@ -21,42 +21,42 @@ En `frontend/src/paginas/FormularioAvistamiento.tsx`, el formulario usa el campo
 Se corrigió únicamente `frontend/src/paginas/FormularioAvistamiento.tsx`: tanto al crear como al editar, el formulario ahora envía el campo `criatura` que acepta el contrato de la API y exige el servicio. Antes, al crear enviaba `criaturaId`, campo que la lista blanca del backend rechazaba. No se modificaron otros archivos de código ni se creó un commit.
 
 ### Prueba
-La prueba anterior con `criaturaId` devolvió 400 `Campos no permitidos en el cuerpo`. Tras la corrección, `npm run check` terminó correctamente para backend y frontend y el archivo no presenta errores en Problems. Se envió un POST temporal con el formato corregido `{"criatura":"65a000000000000000000101","testigo":"Auditoria A01 temporal","ubicacion":"Prueba local descartable","fecha":"2026-10-21","descripcion":"Prueba temporal A01"}`; respondió 500 `Error interno del servidor`, no 201. No se creó un registro ni se pudo comprobar detalle, GET, persistencia o asociación. La respuesta coincide con el fallo general de operaciones con documentos descrito en el alcance. No se generó archivo adicional de evidencia.
+La prueba anterior con `criaturaId` devolvió 400 `Campos no permitidos en el cuerpo`. Después de corregir el formulario y reiniciar el backend, se envió el formulario real desde `/avistamientos/nuevo`: el POST respondió 201, el cuerpo incluyó `criatura` y el navegador abrió el detalle del registro; GET respondió 200 y mostró el nombre de la criatura. Se eliminó el registro temporal con DELETE 204 y se confirmó que quedaron los cuatro registros semilla. `npm run check` pasó para backend y frontend. Pasos y resultados en `evidencias/README.md`.
 
 ### Estado
-Parcial. Se corrigió el desajuste del cuerpo enviado por el formulario, pero no se pudo confirmar el alta de extremo a extremo mientras las escrituras de la API responden 500. La prueba de referencia inexistente también queda bloqueada por ese fallo.
+Resuelto. El formulario envía el campo esperado y la prueba real confirmó creación, lectura del detalle con asociación a la criatura y limpieza del registro temporal.
 
 ## A-02 · La lista no identifica a la criatura
 ### Síntoma
-Según el reporte, el listado de avistamientos no muestra el nombre de la criatura relacionada. El resultado esperado era mostrar el nombre en cada registro. En la prueba actual, `GET /api/avistamientos` y `GET /api/avistamientos?criaturaId=65a000000000000000000101` respondieron 500, así que no se pudo cargar el listado ni observar los cuatro registros semilla en pantalla.
+Según el reporte, el listado de avistamientos no muestra el nombre de la criatura relacionada. El resultado esperado era mostrar el nombre en cada registro. Antes de la corrección, `GET /api/avistamientos` y `GET /api/avistamientos?criaturaId=65a000000000000000000101` respondieron 500, así que no se pudo observar los cuatro registros semilla en pantalla.
 
 ### Causa
-`backend/src/services/avistamientos.service.ts` implementa `listar` con `.lean()` y no hace `populate('criatura')`; entrega la referencia como id. En cambio, `frontend/src/paginas/ListaAvistamientos.tsx` llama a `nombreCriatura`, y `frontend/src/tipos.ts` convierte una referencia de texto en `ID: <id>`, no en el nombre. El servicio `obtener` sí popula la referencia, de modo que las formas de lectura no son coherentes.
+`backend/src/services/avistamientos.service.ts` implementaba `listar` con `.lean()` y sin `populate('criatura')`, así que entregaba la referencia como id. La interfaz muestra el nombre cuando recibe el objeto `Criatura`, pero solo puede mostrar `ID: <id>` cuando recibe la referencia como cadena. El servicio `obtener` ya poblaba esa relación, por lo que las formas de lectura no eran coherentes.
 
 ### Cambio
-No se modificó el código ni se hizo commit de corrección, por instrucción. La causa queda identificada, pero el problema no está corregido.
+Se añadió `.populate('criatura')` a la consulta de listado, conservando el filtro, el orden y `.lean()`. La respuesta ahora entrega la criatura relacionada como objeto, forma que ya admite `frontend/src/tipos.ts` y que `nombreCriatura` usa para mostrar el nombre en `frontend/src/paginas/ListaAvistamientos.tsx`. Se modificó solo el servicio necesario para esta corrección; no se hizo commit.
 
 ### Prueba
-Se consultaron los dos GET indicados, con resultado observado 500 en ambos en vez de una respuesta 200 con los datos relacionados. Por el mismo error no se pudo probar la presentación de nombres ni una respuesta vacía real. El componente `EstadoCarga` sí contiene una rama de estado vacío, pero eso no sustituye la prueba de integración. Evidencia: resultados HTTP y revisión de las formas de lectura/renderizado en los archivos indicados; no hay archivo adicional.
+Tras reiniciar el backend, `GET /api/avistamientos` respondió 200 con total 4 y objetos `criatura` poblados; el filtro `?criaturaId=65a000000000000000000101` respondió 200 con total 2. En el navegador, `/avistamientos` mostró los cuatro testigos y los nombres relacionados (`El Brillo del Río Wamapo`, `El Dragón del Estacionamiento`, `La Ardilla del Martes`). También se verificó el estado vacío con una respuesta simulada. Pasos y resultados en `evidencias/README.md`.
 
 ### Estado
-No resuelto. La lista no popula la referencia y la interfaz solo puede mostrar su id cuando recibe una cadena. La verificación visual con datos reales quedó bloqueada por el 500.
+Resuelto. La API devuelve la relación poblada y el listado del frontend presenta el nombre de cada criatura usando los datos semilla reales.
 
 ## A-03 · Se acepta un peligro inválido
 ### Síntoma
-Según el reporte, una actualización HTTP con `nivelPeligro: 999` se acepta, pese al rango esperado 1–10. Se probó `PUT /api/criaturas/65a000000000000000000101` con `{"nivelPeligro":999}`; el resultado observado fue 500, no el 400 esperado. Tampoco se pudo probar el guardado válido de 7 ni leer el valor posterior, por el fallo común de acceso a documentos.
+Según el reporte, una actualización HTTP con `nivelPeligro: 999` se acepta, pese al rango esperado 1–10. Antes de reiniciar el backend se probó `PUT /api/criaturas/65a000000000000000000101` con `{"nivelPeligro":999}`; el resultado fue 500. Esa respuesta de la instancia anterior no determina el comportamiento actual de esta validación. Tampoco se probó el guardado válido de 7 ni se leyó el valor posterior en esta actualización.
 
 ### Causa
 El esquema de `backend/src/modelos/Criatura.model.ts` declara `min: 1` y `max: 10`, pero `backend/src/services/criaturas.service.ts` hace `findByIdAndUpdate` sin `runValidators: true`. La validación del cuerpo solo comprueba que `nivelPeligro` sea un número finito; no verifica el rango. Así, la ruta de actualización no ejecuta las restricciones de rango del esquema.
 
 ### Cambio
-No se modificó el código ni se hizo commit de corrección, por instrucción. La causa queda identificada; el rechazo de 999 y la preservación del valor válido no quedaron validados en ejecución.
+Se añadió `runValidators: true` a las opciones de `Criatura.findByIdAndUpdate` en `backend/src/services/criaturas.service.ts`. Así Mongoose aplica las reglas `min: 1` y `max: 10` del esquema también durante las actualizaciones. Cambio puntual; no se hizo commit.
 
 ### Prueba
-`PUT` con nivel 999 respondió 500. Como comprobación adicional no destructiva, se intentó crear una criatura temporal para probar después el valor 7 y retirar el registro; el `POST /api/criaturas` respondió 500 y no devolvió id, por lo que no se hicieron cambios en la base. El diagnóstico antes y después informó 3 criaturas y 4 avistamientos. Evidencia: respuestas HTTP y salida de `npm run diagnostico --prefix backend`; no hay archivo adicional.
+Con la criatura semilla `65a000000000000000000101`, `PUT {"nivelPeligro":7}` respondió 200 y GET confirmó el valor 7. Después, `PUT {"nivelPeligro":999}` respondió 400 con mensaje de máximo permitido 10; GET confirmó que el valor siguió en 7. Finalmente se restauró el valor original 2 con PUT 200. `npm run check` pasó para backend y frontend.
 
 ### Estado
-No resuelto. La falta de validadores en la actualización es visible en el código, pero la API indisponible para operaciones con documentos impidió confirmar el resultado funcional y el valor persistido.
+Resuelto. El nivel válido se guarda, el valor fuera del rango se rechaza con 400 y el rechazo conserva el último valor válido.
 
 ## A-04 · El filtro no actualiza la pantalla
 ### Síntoma
